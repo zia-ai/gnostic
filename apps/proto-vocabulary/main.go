@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,7 +12,7 @@ import (
 	metrics "github.com/googleapis/gnostic/metrics"
 	"github.com/googleapis/gnostic/metrics/vocabulary"
 	"github.com/yoheimuta/go-protoparser/v4"
-	"github.com/yoheimuta/go-protoparser/v4/parser"
+	"github.com/yoheimuta/go-protoparser/v4/interpret/unordered"
 )
 
 var (
@@ -114,42 +115,32 @@ func (vocab *Vocabulary) fillVocabularyFromProto(filename string) error {
 	if err != nil {
 		return err
 	}
+	v, err := protoparser.UnorderedInterpret(p)
+	if err != nil {
+		return err
+	}
+	log.Printf("%+v", v)
 
-	for _, x := range p.ProtoBody {
-		switch m := x.(type) {
-		case *parser.Message:
-			vocab.fillVocabularyFromMessage(m)
-		case *parser.Service:
-			vocab.fillVocabularyFromService(m)
-		default:
-			// fmt.Printf("IGNORED %+v\n", v)
-		}
+	for _, m := range v.ProtoBody.Messages {
+		vocab.fillVocabularyFromMessage(m)
+	}
+	for _, s := range v.ProtoBody.Services {
+		vocab.fillVocabularyFromService(s)
 	}
 	return nil
 }
 
-func (vocab *Vocabulary) fillVocabularyFromMessage(m *parser.Message) {
+func (vocab *Vocabulary) fillVocabularyFromMessage(m *unordered.Message) {
 	vocab.Schemas[m.MessageName]++
-
-	for _, x := range m.MessageBody {
-		switch v := x.(type) {
-		case *parser.Field:
-			vocab.Properties[v.FieldName]++
-		default:
-			// fmt.Printf("IGNORED %+v\n", v)
-		}
+	for _, f := range m.MessageBody.Fields {
+		vocab.Properties[f.FieldName]++
 	}
 }
 
-func (vocab *Vocabulary) fillVocabularyFromService(m *parser.Service) {
+func (vocab *Vocabulary) fillVocabularyFromService(m *unordered.Service) {
 
-	for _, x := range m.ServiceBody {
-		switch v := x.(type) {
-		case *parser.RPC:
-			vocab.Operations[v.RPCName]++
-		default:
-			// fmt.Printf("IGNORED %+v\n", v)
-		}
+	for _, op := range m.ServiceBody.RPCs {
+		vocab.Operations[op.RPCName]++
 	}
 }
 

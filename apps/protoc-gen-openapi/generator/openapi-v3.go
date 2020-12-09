@@ -219,6 +219,15 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 
 	// Add the path parameters to the operation parameters.
 	for _, pathParameter := range pathParameters {
+		description := "The " + pathParameter + " id."
+		for _, field := range inputMessage.Fields {
+			if string(field.Desc.Name()) == pathParameter {
+				fieldDescription := g.filterCommentString(field.Comments.Leading)
+				description = fieldDescription
+				break
+			}
+		}
+
 		parameters = append(parameters,
 			&v3.ParameterOrReference{
 				Oneof: &v3.ParameterOrReference_Parameter{
@@ -226,7 +235,7 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 						Name:        pathParameter,
 						In:          "path",
 						Required:    true,
-						Description: "The " + pathParameter + " id.",
+						Description: description,
 						Schema: &v3.SchemaOrReference{
 							Oneof: &v3.SchemaOrReference_Schema{
 								Schema: &v3.Schema{
@@ -238,6 +247,7 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 				},
 			})
 	}
+
 	// Add any unhandled fields in the request message as query parameters.
 	if bodyField != "*" {
 		for _, field := range inputMessage.Fields {

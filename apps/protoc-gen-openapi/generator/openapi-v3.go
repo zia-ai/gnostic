@@ -39,6 +39,7 @@ type OpenAPIv3Generator struct {
 	generatedSchemas  []string // Names of schemas that have already been generated.
 	linterRulePattern *regexp.Regexp
 	namePattern       *regexp.Regexp
+	singleNamePattern *regexp.Regexp
 }
 
 // NewOpenAPIv3Generator creates a new generator for a protoc plugin invocation.
@@ -49,6 +50,7 @@ func NewOpenAPIv3Generator(plugin *protogen.Plugin) *OpenAPIv3Generator {
 		generatedSchemas:  make([]string, 0),
 		linterRulePattern: regexp.MustCompile(`\(-- .* --\)`),
 		namePattern:       regexp.MustCompile("{(.*)=(.*)}"),
+		singleNamePattern: regexp.MustCompile("{(.*?)}"),
 	}
 }
 
@@ -133,6 +135,11 @@ func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *v3.Document, file *protogen
 			var body string
 			if extension != nil {
 				rule := extension.(*annotations.HttpRule)
+				if rule == nil {
+					// the method has no annotations
+					continue
+				}
+
 				body = rule.Body
 				switch pattern := rule.Pattern.(type) {
 				case *annotations.HttpRule_Get:
@@ -192,7 +199,7 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 		parts := strings.Split(starredPath, "/")
 		// The starred path is assumed to be in the form "things/*/otherthings/*".
 		// We want to convert it to "things/{thing}/otherthings/{otherthing}".
-		for i := 0; i < len(parts); i += 2 {
+		for i := 0; i < len(parts)-1; i += 2 {
 			section := parts[i]
 			parameter := singular(section)
 			parts[i+1] = "{" + parameter + "}"
@@ -202,6 +209,14 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 		newPath := strings.Join(parts, "/")
 		path = strings.Replace(path, matches[0], newPath, 1)
 	}
+
+	if allMatches := g.singleNamePattern.FindAllStringSubmatch(path, -1); allMatches != nil {
+		for _, matches := range allMatches {
+			coveredParameters = append(coveredParameters, matches[1])
+			pathParameters = append(pathParameters, matches[1])
+		}
+	}
+
 	// Add the path parameters to the operation parameters.
 	for _, pathParameter := range pathParameters {
 		parameters = append(parameters,
